@@ -1,0 +1,196 @@
+{
+  "benchmark_version": "1.0",
+  "timestamp": "2026-03-30T16:08:24",
+  "system_info": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "machine": "AMD64",
+    "python_version": "3.12.11",
+    "cpu": "AMD64 Family 26 Model 68 Stepping 0, AuthenticAMD",
+    "ram_gb": null,
+    "accelerator": "NVIDIA GeForce RTX 5090",
+    "backend_versions": {
+      "faster-whisper": "1.2.1",
+      "transformers": "5.3.0",
+      "torch": "2.8.0+cu129"
+    }
+  },
+  "config": {
+    "backend": "qwen3-simul-kv",
+    "model_size": "qwen3:0.6b"
+  },
+  "summary": {
+    "n_samples": 5,
+    "total_audio_s": 84.5,
+    "total_processing_s": 70.9,
+    "avg_wer": 0.1247,
+    "weighted_wer": 0.3008,
+    "avg_rtf": 2.344,
+    "overall_rtf": 0.838,
+    "avg_latency_ms": 189.6,
+    "p95_latency_ms": 298.8,
+    "wer_by_language": {
+      "en": 0.1247
+    },
+    "rtf_by_language": {
+      "en": 2.344
+    },
+    "wer_by_category": {
+      "clean": 0.0,
+      "meeting": 0.4011,
+      "noisy": 0.1111
+    }
+  },
+  "results": [
+    {
+      "sample": "en_clean_short",
+      "language": "en",
+      "category": "clean",
+      "duration_s": 3.5,
+      "wer": 0.0,
+      "wer_details": {
+        "substitutions": 0,
+        "insertions": 0,
+        "deletions": 0,
+        "ref_words": 8,
+        "hyp_words": 8
+      },
+      "processing_time_s": 21.61,
+      "rtf": 6.175,
+      "avg_latency_ms": 300.2,
+      "p95_latency_ms": 599.8,
+      "n_transcription_calls": 2,
+      "n_lines": 1,
+      "n_tokens": 8,
+      "timing_valid": true,
+      "timing_monotonic": true,
+      "peak_memory_mb": null,
+      "hypothesis": "Concord returned to its place amidst the tents.",
+      "reference": "CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS",
+      "source": "openslr/librispeech_asr (clean)",
+      "tags": [
+        "short"
+      ]
+    },
+    {
+      "sample": "en_clean_medium",
+      "language": "en",
+      "category": "clean",
+      "duration_s": 14.22,
+      "wer": 0.0,
+      "wer_details": {
+        "substitutions": 0,
+        "insertions": 0,
+        "deletions": 0,
+        "ref_words": 43,
+        "hyp_words": 43
+      },
+      "processing_time_s": 7.37,
+      "rtf": 0.519,
+      "avg_latency_ms": 177.2,
+      "p95_latency_ms": 177.2,
+      "n_transcription_calls": 1,
+      "n_lines": 1,
+      "n_tokens": 2,
+      "timing_valid": true,
+      "timing_monotonic": true,
+      "peak_memory_mb": null,
+      "hypothesis": "The English forwarded to the French baskets of flowers of which they had made a plentiful provision to greet the arrival of the young princess. The French, in return, invited the English to a supper, which was to be given the next day.",
+      "reference": "THE ENGLISH FORWARDED TO THE FRENCH BASKETS OF FLOWERS OF WHICH THEY HAD MADE A PLENTIFUL PROVISION TO GREET THE ARRIVAL OF THE YOUNG PRINCESS THE FRENCH IN RETURN INVITED THE ENGLISH TO A SUPPER WHICH WAS TO BE GIVEN THE NEXT DAY",
+      "source": "openslr/librispeech_asr (clean)",
+      "tags": [
+        "medium"
+      ]
+    },
+    {
+      "sample": "en_noisy_1",
+      "language": "en",
+      "category": "noisy",
+      "duration_s": 2.1,
+      "wer": 0.2222,
+      "wer_details": {
+        "substitutions": 1,
+        "insertions": 0,
+        "deletions": 1,
+        "ref_words": 9,
+        "hyp_words": 8
+      },
+      "processing_time_s": 5.15,
+      "rtf": 2.455,
+      "avg_latency_ms": 246.6,
+      "p95_latency_ms": 246.6,
+      "n_transcription_calls": 1,
+      "n_lines": 1,
+      "n_tokens": 6,
+      "timing_valid": true,
+      "timing_monotonic": true,
+      "peak_memory_mb": null,
+      "hypothesis": "I'm from the cutter lying off the coast.",
+      "reference": "I AM FROM THE CUTTER LYING OFF THE COAST",
+      "source": "openslr/librispeech_asr (other)",
+      "tags": [
+        "accented"
+      ]
+    },
+    {
+      "sample": "en_noisy_2",
+      "language": "en",
+      "category": "noisy",
+      "duration_s": 2.51,
+      "wer": 0.0,
+      "wer_details": {
+        "substitutions": 0,
+        "insertions": 0,
+        "deletions": 0,
+        "ref_words": 9,
+        "hyp_words": 9
+      },
+      "processing_time_s": 5.18,
+      "rtf": 2.062,
+      "avg_latency_ms": 139.0,
+      "p95_latency_ms": 277.5,
+      "n_transcription_calls": 2,
+      "n_lines": 1,
+      "n_tokens": 5,
+      "timing_valid": true,
+      "timing_monotonic": true,
+      "peak_memory_mb": null,
+      "hypothesis": "Don't cry,\" he said. \" I was obliged to come.\"",
+      "reference": "DON'T CRY HE SAID I WAS OBLIGED TO COME",
+      "source": "openslr/librispeech_asr (other)",
+      "tags": [
+        "accented"
+      ]
+    },
+    {
+      "sample": "en_meeting",
+      "language": "en",
+      "category": "meeting",
+      "duration_s": 62.22,
+      "wer": 0.4011,
+      "wer_details": {
+        "substitutions": 31,
+        "insertions": 21,
+        "deletions": 23,
+        "ref_words": 187,
+        "hyp_words": 185
+      },
+      "processing_time_s": 31.57,
+      "rtf": 0.507,
+      "avg_latency_ms": 85.2,
+      "p95_latency_ms": 193.1,
+      "n_transcription_calls": 21,
+      "n_lines": 1,
+      "n_tokens": 22,
+      "timing_valid": true,
+      "timing_monotonic": true,
+      "peak_memory_mb": null,
+      "hypothesis": "Yeah, we're gonna meet up. I mean, we're not even that. Yeah, yeah, yeah. Monday afternoon . These are my parents. Yeah, everything. Yeah, that's what we need. Yeah. Three's good. Yeah. We can always decide then. I mean. Yeah. I mean. Oh um . I don't know. Yeah. That's cool. So even if it doesn't work, you can. You can always decide then. I mean. Yeah. Yeah. I mean. Oh um. I don't know. Yeah. That's cool. So even if it doesn't work, you can. You can program it around and make it work. But worst, we will probably. You open the window, you read through it, you might click on, you know, close it straight away. Okay, okay. I mean, if you already started on too many stuff, I guess we can. You know, I don't know. So what do we need to talk about? We're not actually sure what the user wants for that. Is interesting so we're not gonna give it to you. Probably just two or two or three of whatever whatever they're looking at. Like I don't want to just whatever.",
+      "reference": "YEAH MM-HMM YEAH WE'RE GONNA MEET UP I MEAN WE'RE NOT EVEN THERE YET YEAH YEAH YEAH MM MONDAY AFTERNOON GET TO USE MY PEN YEAH YEAH EVERYTHING YEAH THAT'S WHAT WE NEED YEAH THREE'S GOOD THOUGH YEAH YOU BETTER START HMM WE CAN ALWAYS DECIDE THEN I MEAN YEAH YOU SAW IT YEAH YEAH TRUE WELL OH DEAR I MEAN YEAH OH UM I DON'T KNOW YEAH I TH THAT'S COOL SO EVEN IF IT DOESN'T WORK YOU CAN JIGGERY POKERY AROUND AND MAKE IT WORK HMM BUT MOST WILL PROBABLY WANT TO GO WITH DEFAULTS YOU OPEN THE WINDOW YOU READ THROUGH IT YOU MIGHT CLICK ON YOU KNOW CLOSE IT AGAIN STRAIGHT AWAY OKAY YEAH I MEAN IF YOU ALREADY STARTED ON ON DOING YOUR STUFF I GUESS WE CAN YEAH YEAH I DON'T KNOW SO WHAT DO WE NEED TO TALK ABOUT WE DON'T WE'RE NOT ACTUALLY SURE WHAT THE USER WANTS WITH IT BUT IT'S INTERESTING SO WHY NOT GIVE IT TO HIM PROBABLY JUST TWO OR TWO OR THREE OF WHATEVER WHATEVER THEY'RE LOOKING AT LIKE DIALOGUE ACTS TO WHATEVER CHARACTERISATIONS",
+      "source": "edinburghcstr/ami (ihm, meeting EN2002a)",
+      "tags": [
+        "multi_speaker",
+        "long"
+      ]
+    }
+  ]
+}
