@@ -42,11 +42,19 @@ COMBOS = [
      "label": "fw LA base", "color": "#4a9eff", "marker": "o", "size": 100},
     {"backend": "faster-whisper", "model_size": "small", "policy": "localagreement",
      "label": "fw LA small", "color": "#4a9eff", "marker": "o", "size": 220},
+    {"backend": "faster-whisper", "model_size": "large-v3", "policy": "localagreement",
+     "label": "fw LA large-v3", "color": "#4a9eff", "marker": "o", "size": 350},
+    {"backend": "faster-whisper", "model_size": "large-v3-turbo", "policy": "localagreement",
+     "label": "fw LA turbo", "color": "#4a9eff", "marker": "o", "size": 300},
     # faster-whisper x SimulStreaming
     {"backend": "faster-whisper", "model_size": "base", "policy": "simulstreaming",
      "label": "fw SS base", "color": "#4a9eff", "marker": "s", "size": 100},
     {"backend": "faster-whisper", "model_size": "small", "policy": "simulstreaming",
      "label": "fw SS small", "color": "#4a9eff", "marker": "s", "size": 220},
+    {"backend": "faster-whisper", "model_size": "large-v3", "policy": "simulstreaming",
+     "label": "fw SS large-v3", "color": "#4a9eff", "marker": "s", "size": 350},
+    {"backend": "faster-whisper", "model_size": "large-v3-turbo", "policy": "simulstreaming",
+     "label": "fw SS turbo", "color": "#4a9eff", "marker": "s", "size": 300},
     # mlx-whisper x LocalAgreement
     {"backend": "mlx-whisper", "model_size": "base", "policy": "localagreement",
      "label": "mlx LA base", "color": "#4ecca3", "marker": "o", "size": 100},
@@ -60,6 +68,19 @@ COMBOS = [
     # voxtral-mlx (4B, native streaming)
     {"backend": "voxtral-mlx", "model_size": "", "policy": "",
      "label": "voxtral mlx", "color": "#f5a623", "marker": "D", "size": 250},
+    # voxtral HF (4B, native streaming)
+    {"backend": "voxtral", "model_size": "", "policy": "",
+     "label": "voxtral hf", "color": "#f5a623", "marker": "D", "size": 300},
+    # qwen3 (chunked, ForcedAligner)
+    {"backend": "qwen3", "model_size": "qwen3:0.6b", "policy": "",
+     "label": "qwen3 0.6B", "color": "#e056a0", "marker": "h", "size": 100},
+    {"backend": "qwen3", "model_size": "qwen3:1.7b", "policy": "",
+     "label": "qwen3 1.7B", "color": "#e056a0", "marker": "h", "size": 220},
+    # qwen3-simul-kv (native streaming with KV cache)
+    {"backend": "qwen3-simul-kv", "model_size": "qwen3:0.6b", "policy": "",
+     "label": "qwen3-kv 0.6B", "color": "#e056a0", "marker": "s", "size": 100},
+    {"backend": "qwen3-simul-kv", "model_size": "qwen3:1.7b", "policy": "",
+     "label": "qwen3-kv 1.7B", "color": "#e056a0", "marker": "s", "size": 220},
 ]
 
 
@@ -76,7 +97,7 @@ def is_backend_available(backend):
             from whisperlivekit.voxtral_mlx.loader import load_voxtral_model; return True  # noqa
         elif backend == "voxtral":
             from transformers import VoxtralRealtimeForConditionalGeneration; return True  # noqa
-        elif backend in ("qwen3", "qwen3-simul"):
+        elif backend in ("qwen3", "qwen3-simul", "qwen3-simul-kv"):
             from whisperlivekit.qwen3_asr import _patch_transformers_compat
             _patch_transformers_compat()
             from qwen_asr import Qwen3ASRModel; return True  # noqa
@@ -265,11 +286,17 @@ def generate_scatter(results, system_info, output_path, n_samples, lang="en",
         "mlx SS base":    (-55, 8),
         "mlx SS small":   (-55, -5),
         "voxtral mlx":    (10, -14),
+        "voxtral hf":     (10, 8),
         "qwen3 0.6B":     (10, 8),
+        "qwen3 1.7B":     (10, -14),
+        "qwen3-kv 0.6B":  (10, 8),
+        "qwen3-kv 1.7B":  (10, -14),
         "qwen3-mlx 0.6B": (10, -14),
         "qwen3-mlx 1.7B": (10, 8),
         "fw LA large-v3": (8, -5),
+        "fw LA turbo":    (8, 8),
         "fw SS large-v3": (8, 5),
+        "fw SS turbo":    (8, -14),
     }
 
     # Plot main points

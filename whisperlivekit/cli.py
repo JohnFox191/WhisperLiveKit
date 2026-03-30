@@ -770,6 +770,9 @@ def cmd_bench(args: list):
                         help="Show hypothesis vs reference for each sample")
     parser.add_argument("--verbose", "-v", action="store_true",
                         help="Show detailed logs")
+    parser.add_argument("--backend-policy", default=None,
+                        choices=["simulstreaming", "localagreement"],
+                        help="Streaming policy (default: backend's default)")
 
     parsed = parser.parse_args(args)
 
@@ -822,6 +825,7 @@ async def _run_bench_new(parsed, languages, categories):
         categories=categories,
         quick=parsed.quick,
         on_progress=on_progress,
+        backend_policy=parsed.backend_policy,
     )
 
     print(f"\n  Downloading benchmark samples (cached after first run)...",

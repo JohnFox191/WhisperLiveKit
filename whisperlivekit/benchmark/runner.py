@@ -38,6 +38,7 @@ class BenchmarkRunner:
         quick: bool = False,
         speed: float = 0,
         on_progress: Optional[Callable] = None,
+        backend_policy: Optional[str] = None,
     ):
         self.backend = resolve_backend(backend)
         self.model_size = model_size
@@ -46,6 +47,7 @@ class BenchmarkRunner:
         self.quick = quick
         self.speed = speed
         self.on_progress = on_progress
+        self.backend_policy = backend_policy
 
     async def run(self) -> BenchmarkReport:
         """Run the full benchmark suite and return a report."""
@@ -85,6 +87,8 @@ class BenchmarkRunner:
         }
         if self.backend not in ("auto",):
             harness_kwargs["backend"] = self.backend
+        if self.backend_policy:
+            harness_kwargs["backend_policy"] = self.backend_policy
 
         report = BenchmarkReport(
             backend=self.backend,
