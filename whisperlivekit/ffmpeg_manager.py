@@ -37,9 +37,11 @@ class FFmpegState(Enum):
     FAILED = "failed"
 
 class FFmpegManager:
-    def __init__(self, sample_rate: int = 16000, channels: int = 1):
+    def __init__(self, sample_rate: int = 16000, channels: int = 1,
+                 input_format_args: Optional[list] = None):
         self.sample_rate = sample_rate
         self.channels = channels
+        self.input_format_args = input_format_args or []
 
         self.process: Optional[asyncio.subprocess.Process] = None
         self._stderr_task: Optional[asyncio.Task] = None
@@ -61,11 +63,14 @@ class FFmpegManager:
                 "ffmpeg",
                 "-hide_banner",
                 "-loglevel", "error",
+                *self.input_format_args,
                 "-i", "pipe:0",
                 "-f", "s16le",
                 "-acodec", "pcm_s16le",
                 "-ac", str(self.channels),
                 "-ar", str(self.sample_rate),
+                "-flush_packets", "1",
+                "-fflags", "+nobuffer",
                 "pipe:1"
             ]
 

@@ -59,6 +59,9 @@ class AudioProcessor:
 
     def __init__(self, **kwargs: Any) -> None:
         """Initialize the audio processor with configuration, models, and state."""
+        # Optional diagnostic session (set externally by deepgram_compat)
+        self._diag = None
+
         # Extract per-session language override before passing to TranscriptionEngine
         session_language = kwargs.pop('language', None)
 
@@ -188,6 +191,8 @@ class AudioProcessor:
     async def _enqueue_active_audio(self, pcm_chunk: np.ndarray) -> None:
         if pcm_chunk is None or pcm_chunk.size == 0:
             return
+        if self._diag:
+            self._diag.on_audio_enqueued(pcm_chunk)
         if self.transcription_queue:
             await self.transcription_queue.put(pcm_chunk.copy())
         if self.args.diarization and self.diarization_queue:
@@ -257,6 +262,9 @@ class AudioProcessor:
                     # No data currently available
                     await asyncio.sleep(0.05)
                     continue
+
+                if self._diag:
+                    self._diag.on_ffmpeg_output(chunk)
 
                 self.pcm_buffer.extend(chunk)
                 await self.handle_pcm_data()
@@ -362,10 +370,11 @@ class AudioProcessor:
                     continue
                 elif isinstance(item, np.ndarray):
                     pcm_array = item
-                    logger.info(asr_processing_logs)
                     cumulative_pcm_duration_stream_time += len(pcm_array) / self.sample_rate
                     stream_time_end_of_current_pcm = cumulative_pcm_duration_stream_time
+                    audio_buf_before = len(getattr(self.transcription, 'audio_buffer', []))
                     self.transcription.insert_audio_chunk(pcm_array, stream_time_end_of_current_pcm)
+                    audio_buf_after = len(getattr(self.transcription, 'audio_buffer', []))
                     _t0 = time()
                     new_tokens, current_audio_processed_upto = await asyncio.to_thread(self.transcription.process_iter)
                     _dur = time() - _t0
@@ -373,9 +382,21 @@ class AudioProcessor:
                     self.metrics.n_transcription_calls += 1
                     new_tokens = new_tokens or []
                     self.metrics.n_tokens_produced += len(new_tokens)
+                    audio_buf_post_infer = len(getattr(self.transcription, 'audio_buffer', []))
+                    asr_processing_logs += (
+                        f" chunk={len(pcm_array)} | buf={audio_buf_before}->{audio_buf_after}->{audio_buf_post_infer}"
+                        f" | tokens={len(new_tokens)} | infer={_dur:.3f}s"
+                        f" | upto={current_audio_processed_upto:.2f}s"
+                    )
+                    if new_tokens:
+                        token_texts = [getattr(t, 'text', str(t)) for t in new_tokens]
+                        asr_processing_logs += f" | TEXT: {token_texts}"
+                    logger.info(asr_processing_logs)
 
                 _buffer_transcript = self.transcription.get_buffer()
                 buffer_text = _buffer_transcript.text
+                if buffer_text:
+                    logger.info(f"  buffer_text='{buffer_text}'")
 
                 if new_tokens:
                     validated_text = self.sep.join([t.text for t in new_tokens])
@@ -642,9 +663,19 @@ class AudioProcessor:
             self.current_silence = Silence(start=0.0, is_starting=True)
             self.tokens_alignment.beg_loop = self.beg_loop
 
+        if self._diag:
+            self._diag.on_process_audio(len(message) if message else 0, not message)
+
         if not message:
             logger.info("Empty audio message received, initiating stop sequence.")
             self.is_stopping = True
+
+            if self._diag:
+                remaining = len(self.pcm_buffer)
+                self._diag.on_race_event(
+                    f"STOP: pcm_buf={remaining}B, is_pcm={self.is_pcm_input}, "
+                    f"ffmpeg={'running' if self.ffmpeg_manager and hasattr(self.ffmpeg_manager, 'state') else 'N/A'}"
+                )
 
             # Flush any remaining PCM data before signaling end-of-stream
             if self.is_pcm_input and self.pcm_buffer:
@@ -652,9 +683,13 @@ class AudioProcessor:
 
             if self.transcription_queue:
                 await self.transcription_queue.put(SENTINEL)
+                if self._diag:
+                    self._diag.on_sentinel_sent()
 
             if not self.is_pcm_input and self.ffmpeg_manager:
                 await self.ffmpeg_manager.stop()
+                if self._diag:
+                    self._diag.on_ffmpeg_stopped()
 
             return
 
@@ -686,6 +721,9 @@ class AudioProcessor:
             await self._end_silence()
 
         # Process when enough data
+        if self._diag:
+            self._diag.on_handle_pcm(len(self.pcm_buffer), self.bytes_per_sec)
+
         if len(self.pcm_buffer) < self.bytes_per_sec:
             return
 
@@ -711,6 +749,8 @@ class AudioProcessor:
         if self.args.vac:
             res = self.vac(pcm_array)
 
+        was_enqueued = False
+
         if res is not None:
             if "start" in res and self.current_silence:
                 await self._end_silence(at_sample=res.get("start"))
@@ -721,10 +761,23 @@ class AudioProcessor:
                 )
                 if pre_silence_chunk is not None and pre_silence_chunk.size > 0:
                     await self._enqueue_active_audio(pre_silence_chunk)
+                    was_enqueued = True
                 await self._begin_silence(at_sample=res.get("end"))
 
         if not self.current_silence:
             await self._enqueue_active_audio(pcm_array)
+            was_enqueued = True
+
+        if self._diag:
+            rms = float(np.sqrt(np.mean(pcm_array ** 2)))
+            self._diag.on_vac_decision(
+                chunk_samples=num_samples,
+                total_samples=chunk_sample_end,
+                rms=rms,
+                vac_result=res,
+                current_silence=self.current_silence is not None,
+                was_enqueued=was_enqueued,
+            )
 
         self.total_pcm_samples = chunk_sample_end
 

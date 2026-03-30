@@ -4,7 +4,7 @@ Provides a /v1/listen endpoint that speaks the Deepgram Live Transcription
 protocol, enabling drop-in compatibility with Deepgram client SDKs.
 
 Protocol mapping:
-  - Client sends binary audio frames → forwarded to AudioProcessor
+  - Client sends binary audio frames -> forwarded to AudioProcessor
   - Client sends JSON control messages (KeepAlive, CloseStream, Finalize)
   - Server sends Results, Metadata, UtteranceEnd messages
 
@@ -19,10 +19,41 @@ import json
 import logging
 import time
 import uuid
+from typing import Optional
 
 from fastapi import WebSocket, WebSocketDisconnect
 
 logger = logging.getLogger(__name__)
+
+# Maps Deepgram encoding names to FFmpeg input format arguments.
+# When encoding is specified, the client sends raw headerless audio and we
+# must tell FFmpeg exactly what format to expect via -f / -acodec / -ar / -ac.
+# When encoding is omitted, audio is containerized and FFmpeg auto-detects.
+_ENCODING_TO_FFMPEG = {
+    "linear16": {"format": "s16le", "codec": "pcm_s16le"},
+    "linear32": {"format": "f32le", "codec": "pcm_f32le"},
+    "mulaw": {"format": "mulaw", "codec": "pcm_mulaw"},
+    "alaw": {"format": "alaw", "codec": "pcm_alaw"},
+    "flac": {"format": "flac", "codec": None},
+    "opus": {"format": "ogg", "codec": None},
+    "ogg-opus": {"format": "ogg", "codec": None},
+    "speex": {"format": "ogg", "codec": None},
+}
+
+
+def _build_ffmpeg_input_args(encoding: Optional[str], sample_rate: int,
+                             channels: int) -> list:
+    """Build FFmpeg input format arguments for the given Deepgram encoding."""
+    if not encoding:
+        return []
+    spec = _ENCODING_TO_FFMPEG.get(encoding)
+    if not spec:
+        return []
+    args = ["-f", spec["format"]]
+    if spec["codec"]:
+        args += ["-acodec", spec["codec"]]
+    args += ["-ar", str(sample_rate), "-ac", str(channels)]
+    return args
 
 
 def _parse_time_str(time_str: str) -> float:
@@ -36,11 +67,7 @@ def _parse_time_str(time_str: str) -> float:
 
 
 def _line_to_words(line: dict) -> list:
-    """Convert a line dict to Deepgram-style word objects.
-
-    Distributes timestamps proportionally across words since
-    WhisperLiveKit provides segment-level timestamps.
-    """
+    """Convert a line dict to Deepgram-style word objects."""
     text = line.get("text", "")
     if not text or not text.strip():
         return []
@@ -88,7 +115,6 @@ def _lines_to_result(lines: list, is_final: bool, speech_final: bool,
 
     transcript = " ".join(full_text_parts)
 
-    # Calculate duration from word boundaries
     if all_words:
         seg_start = all_words[0]["start"]
         seg_end = all_words[-1]["end"]
@@ -157,13 +183,12 @@ class DeepgramAdapter:
         speech_lines = [l for l in lines if l.get("speaker", 0) != -2]
         n_speech = len(speech_lines)
 
-        # Detect new committed lines → emit as is_final=true results
+        # Detect new committed lines -> emit as is_final=true results
         if n_speech > self._sent_lines:
             new_lines = speech_lines[self._sent_lines:]
             result = _lines_to_result(new_lines, is_final=True, speech_final=True)
             await self.websocket.send_json(result)
 
-            # Track last word end for UtteranceEnd
             if result["channel"]["alternatives"][0]["words"]:
                 self._last_word_end = result["channel"]["alternatives"][0]["words"][-1]["end"]
 
@@ -171,7 +196,6 @@ class DeepgramAdapter:
 
         # Emit buffer as interim result (is_final=false)
         elif buffer and buffer.strip():
-            # SpeechStarted event
             if self._vad_events and not self._speech_started_sent:
                 await self.websocket.send_json({
                     "type": "SpeechStarted",
@@ -180,7 +204,6 @@ class DeepgramAdapter:
                 })
                 self._speech_started_sent = True
 
-            # Create interim result from buffer
             interim = {
                 "type": "Results",
                 "channel_index": [0, 1],
@@ -200,10 +223,9 @@ class DeepgramAdapter:
             }
             await self.websocket.send_json(interim)
 
-        # Detect silence → emit UtteranceEnd
+        # Detect silence -> emit UtteranceEnd
         silence_lines = [l for l in lines if l.get("speaker") == -2]
         if silence_lines and n_speech > 0:
-            # Check if there's new silence after our last speech
             for sil in silence_lines:
                 sil_start = _parse_time_str(sil.get("start", "0:00:00"))
                 if sil_start >= self._last_word_end:
@@ -219,19 +241,57 @@ class DeepgramAdapter:
 async def handle_deepgram_websocket(websocket: WebSocket, transcription_engine, config):
     """Handle a Deepgram-compatible WebSocket session."""
     from whisperlivekit.audio_processor import AudioProcessor
+    from whisperlivekit.deepgram_diag import DiagSession, is_enabled as diag_enabled
+    from whisperlivekit.ffmpeg_manager import FFmpegManager
 
     # Parse Deepgram query parameters
     params = websocket.query_params
     language = params.get("language", None)
+    encoding = params.get("encoding", None)
+    sample_rate = int(params.get("sample_rate", "16000"))
+    channels = int(params.get("channels", "1"))
     vad_events = params.get("vad_events", "false").lower() == "true"
+
+    print(f"[DEEPGRAM-COMPAT] params: encoding={encoding}, sample_rate={sample_rate}, channels={channels}, language={language}")
+    logger.info(
+        "Deepgram-compat params: encoding=%s, sample_rate=%d, channels=%d, language=%s",
+        encoding, sample_rate, channels, language,
+    )
 
     audio_processor = AudioProcessor(
         transcription_engine=transcription_engine,
         language=language,
     )
 
-    await websocket.accept()
-    logger.info("Deepgram-compat WebSocket opened")
+    # Attach diagnostic session if enabled (DEEPGRAM_DIAG=1)
+    diag = None
+    if diag_enabled():
+        diag = DiagSession(f"dg_{int(time.time())}")
+        audio_processor._diag = diag
+
+    # When the client declares a raw encoding, replace the AudioProcessor's
+    # FFmpegManager with one that has explicit input format flags so FFmpeg
+    # knows what the raw byte stream contains (sample rate, codec, channels).
+    input_args = _build_ffmpeg_input_args(encoding, sample_rate, channels)
+    print(f"[DEEPGRAM-COMPAT] input_args={input_args}, has_ffmpeg={audio_processor.ffmpeg_manager is not None}")
+    if input_args and audio_processor.ffmpeg_manager is not None:
+        print(f"[DEEPGRAM-COMPAT] Replacing FFmpegManager with: {input_args}")
+        old_callback = audio_processor.ffmpeg_manager.on_error_callback
+        audio_processor.ffmpeg_manager = FFmpegManager(
+            sample_rate=audio_processor.sample_rate,
+            channels=audio_processor.channels,
+            input_format_args=input_args,
+        )
+        audio_processor.ffmpeg_manager.on_error_callback = old_callback
+
+
+    # Echo back the "token" subprotocol if the client requested it.
+    # Per RFC 6455 S4.2.2, the client MUST fail the connection if it sent
+    # Sec-WebSocket-Protocol but the server didn't select one.
+    requested_protocols = websocket.headers.get("sec-websocket-protocol", "")
+    subprotocol = "token" if "token" in requested_protocols else None
+    await websocket.accept(subprotocol=subprotocol)
+    logger.info("Deepgram-compat WebSocket opened (subprotocol=%s)", subprotocol)
 
     adapter = DeepgramAdapter(websocket)
     adapter._vad_events = vad_events
@@ -241,11 +301,23 @@ async def handle_deepgram_websocket(websocket: WebSocket, transcription_engine, 
 
     results_generator = await audio_processor.create_tasks()
 
+    # Debug counters
+    _dbg = {"chunks_in": 0, "bytes_in": 0, "results_out": 0}
+
     # Results consumer
     async def handle_results():
         try:
             async for response in results_generator:
-                await adapter.process_update(response.to_dict())
+                rd = response.to_dict()
+                _dbg["results_out"] += 1
+                lines = rd.get("lines", [])
+                buf = rd.get("buffer_transcription", "")
+                if _dbg["results_out"] <= 5 or _dbg["results_out"] % 20 == 0:
+                    print(f"[DEEPGRAM-COMPAT] result #{_dbg['results_out']}: "
+                          f"lines={len(lines)}, buffer='{buf[:60]}', "
+                          f"pcm_buf={len(audio_processor.pcm_buffer)}B, "
+                          f"total_samples={audio_processor.total_pcm_samples}")
+                await adapter.process_update(rd)
         except WebSocketDisconnect:
             pass
         except Exception as e:
@@ -257,20 +329,27 @@ async def handle_deepgram_websocket(websocket: WebSocket, transcription_engine, 
     try:
         while True:
             try:
-                # Try to receive as text first (for control messages)
                 message = await asyncio.wait_for(
                     websocket.receive(), timeout=30.0,
                 )
             except asyncio.TimeoutError:
-                # No data for 30s — close
                 break
 
             if "bytes" in message:
                 data = message["bytes"]
                 if data:
+                    _dbg["chunks_in"] += 1
+                    _dbg["bytes_in"] += len(data)
+                    if _dbg["chunks_in"] <= 3 or _dbg["chunks_in"] % 100 == 0:
+                        ffm = audio_processor.ffmpeg_manager
+                        ffm_state = ffm.state.value if ffm else "N/A"
+                        print(f"[DEEPGRAM-COMPAT] chunk #{_dbg['chunks_in']}: "
+                              f"{len(data)}B (total {_dbg['bytes_in']}B), "
+                              f"ffmpeg={ffm_state}, "
+                              f"pcm_buf={len(audio_processor.pcm_buffer)}B, "
+                              f"results_so_far={_dbg['results_out']}")
                     await audio_processor.process_audio(data)
                 else:
-                    # Empty bytes = end of audio
                     await audio_processor.process_audio(b"")
                     break
             elif "text" in message:
@@ -282,17 +361,15 @@ async def handle_deepgram_websocket(websocket: WebSocket, transcription_engine, 
                         await audio_processor.process_audio(b"")
                         break
                     elif msg_type == "Finalize":
-                        # Flush current audio — trigger end-of-utterance
                         await audio_processor.process_audio(b"")
                         results_generator = await audio_processor.create_tasks()
                     elif msg_type == "KeepAlive":
-                        pass  # Just keep the connection alive
+                        pass
                     else:
                         logger.debug("Unknown Deepgram control message: %s", msg_type)
                 except json.JSONDecodeError:
                     logger.warning("Invalid JSON control message")
             else:
-                # WebSocket close
                 break
 
     except WebSocketDisconnect:
@@ -307,4 +384,6 @@ async def handle_deepgram_websocket(websocket: WebSocket, transcription_engine, 
         except (asyncio.CancelledError, Exception):
             pass
         await audio_processor.cleanup()
+        if diag:
+            diag.finish()
         logger.info("Deepgram-compat WebSocket cleaned up")

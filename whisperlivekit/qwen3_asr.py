@@ -108,6 +108,12 @@ QWEN3_MODEL_MAPPING = {
     "qwen3-asr-0.6b": "Qwen/Qwen3-ASR-0.6B",
     "qwen3-1.7b": "Qwen/Qwen3-ASR-1.7B",
     "qwen3-0.6b": "Qwen/Qwen3-ASR-0.6B",
+    # CLI colon-format aliases (wlk run qwen3:0.6b)
+    "qwen3:1.7b": "Qwen/Qwen3-ASR-1.7B",
+    "qwen3:0.6b": "Qwen/Qwen3-ASR-0.6B",
+    # Bare size aliases
+    "1.7b": "Qwen/Qwen3-ASR-1.7B",
+    "0.6b": "Qwen/Qwen3-ASR-0.6B",
     # Whisper-style size aliases (map to closest Qwen3 model)
     "large": "Qwen/Qwen3-ASR-1.7B",
     "large-v3": "Qwen/Qwen3-ASR-1.7B",

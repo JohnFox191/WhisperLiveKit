@@ -1,8 +1,12 @@
 """Benchmark runner — orchestrates runs through TestHarness."""
 
 import logging
-import resource
 import time
+
+try:
+    import resource
+except ImportError:
+    resource = None  # Not available on Windows
 from typing import Callable, List, Optional
 
 from whisperlivekit.benchmark.compat import backend_supports_language, resolve_backend
@@ -115,7 +119,7 @@ class BenchmarkRunner:
         kwargs = {**harness_kwargs, "lan": sample.language}
 
         # Memory before
-        mem_before = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        mem_before = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss if resource else 0
 
         t_start = time.perf_counter()
 
@@ -132,7 +136,7 @@ class BenchmarkRunner:
         t_elapsed = time.perf_counter() - t_start
 
         # Memory after
-        mem_after = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        mem_after = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss if resource else 0
         # On macOS ru_maxrss is bytes, on Linux it's KB
         import sys
         divisor = 1024 * 1024 if sys.platform == "darwin" else 1024
